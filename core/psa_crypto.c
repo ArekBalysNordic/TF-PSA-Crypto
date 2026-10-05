@@ -8,15 +8,19 @@
 
 #include "tf_psa_crypto_common.h"
 #include "psa_crypto_core_common.h"
+#include "tf-psa-crypto/psa_crypto_client_builtin_pake.h"
 
-#if defined(MBEDTLS_PSA_CRYPTO_C)
+#if MBEDTLS_PSA_CRYPTO_HAVE_LOCAL_PSA
 
 #include "check_crypto_config.h"
 #include "psa/crypto.h"
 #include "psa/crypto_values.h"
 
-#include "psa_crypto_cipher.h"
 #include "psa_crypto_core.h"
+#include "psa_crypto_slot_management.h"
+
+#if defined(MBEDTLS_PSA_CRYPTO_C)
+#include "psa_crypto_cipher.h"
 #include "psa_crypto_invasive.h"
 #include "psa_crypto_driver_wrappers.h"
 #include "psa_crypto_driver_wrappers_no_static.h"
@@ -25,18 +29,12 @@
 #include "psa_crypto_hash.h"
 #include "psa_crypto_mac.h"
 #include "psa_crypto_rsa.h"
-#include "psa_crypto_ecp.h"
-#include "psa_crypto_slot_management.h"
 /* Include internal declarations that are useful for implementing persistently
  * stored keys. */
 #include "psa_crypto_storage.h"
 
 #include "psa_crypto_random.h"
 #include "psa_crypto_random_impl.h"
-
-#include <stdlib.h>
-#include <string.h>
-#include "mbedtls/platform.h"
 
 #include "mbedtls/private/aes.h"
 #include "mbedtls/asn1.h"
@@ -51,7 +49,6 @@
 #include "mbedtls/constant_time.h"
 #include "mbedtls/private/ecp.h"
 #include "mbedtls/private/entropy.h"
-#include "mbedtls/private/error_common.h"
 #include "mbedtls/private/gcm.h"
 #include "mbedtls/private/md5.h"
 #include "mbedtls/pk.h"
@@ -59,16 +56,26 @@
 #include <mbedtls/private/pk_private.h>
 #endif /* MBEDTLS_PK_HAVE_PRIVATE_HEADER */
 #include "pk_wrap.h"
-#include "mbedtls/platform_util.h"
-#include "mbedtls/private/error_common.h"
 #include "mbedtls/private/ripemd160.h"
 #include "mbedtls/private/rsa.h"
 #include "mbedtls/private/sha1.h"
 #include "mbedtls/private/sha256.h"
 #include "mbedtls/private/sha512.h"
 #include "psa_util_internal.h"
+#elif defined(MBEDTLS_PSA_CRYPTO_CLIENT_BUILTIN_PAKE)
+#include "tf-psa-crypto/psa_crypto_client_local_wrappers.h"
+#endif
+
+#include <stdlib.h>
+#include <string.h>
+#include "mbedtls/platform.h"
+#include "mbedtls/platform_util.h"
+#include "mbedtls/private/error_common.h"
+
+#if defined(MBEDTLS_THREADING_C)
 #include "mbedtls/threading.h"
 #include "threading_internal.h"
+#endif
 
 #include "constant_time_internal.h"
 
@@ -121,12 +128,15 @@ typedef enum {
 
 typedef struct {
     uint8_t initialized;
+#if defined(MBEDTLS_PSA_CRYPTO_C)
     uint8_t rng_state;
     mbedtls_psa_random_context_t rng;
+#endif
 } psa_global_data_t;
 
 static psa_global_data_t global_data;
 
+#if defined(MBEDTLS_PSA_CRYPTO_C)
 static uint8_t psa_get_initialized(void)
 {
     uint8_t initialized;
@@ -154,7 +164,9 @@ static uint8_t psa_get_initialized(void)
 
     return initialized;
 }
+#endif /* MBEDTLS_PSA_CRYPTO_C */
 
+#if defined(MBEDTLS_PSA_CRYPTO_C)
 static uint8_t psa_get_drivers_initialized(void)
 {
     uint8_t initialized;
@@ -172,6 +184,9 @@ static uint8_t psa_get_drivers_initialized(void)
     return initialized;
 }
 
+#endif /* MBEDTLS_PSA_CRYPTO_C */
+
+#if defined(MBEDTLS_PSA_CRYPTO_C)
 int psa_is_ready_for_cipher(void)
 {
     return psa_get_drivers_initialized();
@@ -192,10 +207,13 @@ int psa_can_do_hash(psa_algorithm_t hash_alg)
     (void) hash_alg;
     return 1;
 }
+#endif /* MBEDTLS_PSA_CRYPTO_C */
 
+#if defined(MBEDTLS_PSA_CRYPTO_C)
 #define GUARD_MODULE_INITIALIZED        \
     if (psa_get_initialized() == 0)     \
     return PSA_ERROR_BAD_STATE;
+#endif /* MBEDTLS_PSA_CRYPTO_C */
 
 #if !defined(MBEDTLS_PSA_ASSUME_EXCLUSIVE_BUFFERS)
 
@@ -343,6 +361,7 @@ static int psa_is_dh_key_size_valid(size_t bits)
           MBEDTLS_PSA_BUILTIN_KEY_TYPE_DH_PUBLIC_KEY ||
           PSA_WANT_KEY_TYPE_DH_KEY_PAIR_GENERATE */
 
+#if defined(MBEDTLS_PSA_CRYPTO_C)
 psa_status_t mbedtls_to_psa_error(int ret)
 {
     /* Only legacy error codes need to be translated.
@@ -538,6 +557,9 @@ static void psa_wipe_tag_output_buffer(uint8_t *output_buffer, psa_status_t stat
     memset(output_buffer + offset, '!', output_buffer_size - offset);
 }
 
+#endif /* MBEDTLS_PSA_CRYPTO_C - mbedtls_to_psa_error */
+
+#if MBEDTLS_PSA_CRYPTO_HAVE_LOCAL_PSA
 
 psa_status_t psa_validate_unstructured_key_bit_size(psa_key_type_t type,
                                                     size_t bits)
@@ -737,6 +759,7 @@ psa_status_t psa_import_key_into_slot(
     return PSA_ERROR_NOT_SUPPORTED;
 }
 
+#if defined(MBEDTLS_PSA_CRYPTO_C)
 /** Calculate the intersection of two algorithm usage policies.
  *
  * Return 0 (which allows no operation) on incompatibility.
@@ -839,6 +862,7 @@ static psa_algorithm_t psa_key_policy_algorithm_intersection(
     /* If the policies are incompatible, allow nothing. */
     return 0;
 }
+#endif /* MBEDTLS_PSA_CRYPTO_C */
 
 static int psa_key_algorithm_permits(psa_key_type_t key_type,
                                      psa_algorithm_t policy_alg,
@@ -958,6 +982,7 @@ static int psa_key_algorithm_permits(psa_key_type_t key_type,
  * \retval PSA_ERROR_NOT_PERMITTED      When \p alg is a specific algorithm, but
  *                                      the \p policy does not allow it.
  */
+
 static psa_status_t psa_key_policy_permits(const psa_key_policy_t *policy,
                                            psa_key_type_t key_type,
                                            psa_algorithm_t alg)
@@ -998,6 +1023,7 @@ static psa_status_t psa_key_policy_permits(const psa_key_policy_t *policy,
  *         \c key_type, \c *policy and \c *constraint are incompatible.
  *         \c *policy is unchanged.
  */
+#if defined(MBEDTLS_PSA_CRYPTO_C)
 static psa_status_t psa_restrict_key_policy(
     psa_key_type_t key_type,
     psa_key_policy_t *policy,
@@ -1020,6 +1046,7 @@ static psa_status_t psa_restrict_key_policy(
     policy->alg2 = intersection_alg2;
     return PSA_SUCCESS;
 }
+#endif /* MBEDTLS_PSA_CRYPTO_C */
 
 /** Get the description of a key given its identifier and policy constraints
  *  and lock it.
@@ -1106,6 +1133,7 @@ error:
  * (when mutexes are enabled). psa_unregister_read_under_mutex() encapsulates
  * psa_unregister_read() with mutex lock and unlock operations.
  */
+#if defined(MBEDTLS_PSA_CRYPTO_C)
 static psa_status_t psa_get_and_lock_transparent_key_slot_with_policy(
     mbedtls_svc_key_id_t key,
     psa_key_slot_t **p_slot,
@@ -1133,6 +1161,7 @@ static psa_status_t psa_get_and_lock_transparent_key_slot_with_policy(
 
     return PSA_SUCCESS;
 }
+#endif /* MBEDTLS_PSA_CRYPTO_C */
 
 psa_status_t psa_remove_key_data_from_memory(psa_key_slot_t *slot)
 {
@@ -1227,6 +1256,9 @@ psa_status_t psa_wipe_key_slot(psa_key_slot_t *slot)
     return status;
 }
 
+#endif /* MBEDTLS_PSA_CRYPTO_HAVE_LOCAL_PSA - local helpers */
+
+#if defined(MBEDTLS_PSA_CRYPTO_C)
 psa_status_t psa_destroy_key(mbedtls_svc_key_id_t key)
 {
     psa_key_slot_t *slot;
@@ -1706,6 +1738,8 @@ psa_status_t psa_export_public_key_iop_abort(psa_export_public_key_iop_t *operat
 #endif
 }
 
+#endif /* MBEDTLS_PSA_CRYPTO_C - public API block 2 */
+
 /** Validate that a key policy is internally well-formed.
  *
  * This function only rejects invalid policies. It does not validate the
@@ -1990,7 +2024,11 @@ static psa_status_t psa_validate_optional_attributes(
     return PSA_SUCCESS;
 }
 
+#if defined(MBEDTLS_PSA_CRYPTO_CLIENT_BUILTIN_PAKE) && !defined(MBEDTLS_PSA_CRYPTO_C)
+psa_status_t psa_crypto_local_import_key(const psa_key_attributes_t *attributes,
+#else
 psa_status_t psa_import_key(const psa_key_attributes_t *attributes,
+#endif
                             const uint8_t *data_external,
                             size_t data_length,
                             mbedtls_svc_key_id_t *key)
@@ -2076,6 +2114,7 @@ exit:
     return status;
 }
 
+#if defined(MBEDTLS_PSA_CRYPTO_C)
 psa_status_t psa_copy_key(mbedtls_svc_key_id_t source_key,
                           const psa_key_attributes_t *specified_attributes,
                           mbedtls_svc_key_id_t *target_key)
@@ -8928,10 +8967,13 @@ psa_status_t psa_generate_key_iop_abort(
 
 
 
+#endif /* MBEDTLS_PSA_CRYPTO_C - public API block 3 */
+
 /****************************************************************/
 /* Module setup */
 /****************************************************************/
 
+#if defined(MBEDTLS_PSA_CRYPTO_C)
 #if !defined(MBEDTLS_PSA_CRYPTO_EXTERNAL_RNG)
 psa_status_t mbedtls_psa_crypto_configure_entropy_sources(
     void (* entropy_init)(mbedtls_entropy_context *ctx),
@@ -8958,6 +9000,7 @@ psa_status_t mbedtls_psa_crypto_configure_entropy_sources(
     return status;
 }
 #endif /* !defined(MBEDTLS_PSA_CRYPTO_EXTERNAL_RNG) */
+#endif /* MBEDTLS_PSA_CRYPTO_C - RNG configure */
 
 void mbedtls_psa_crypto_free(void)
 {
@@ -8980,6 +9023,7 @@ void mbedtls_psa_crypto_free(void)
     mbedtls_mutex_unlock(&mbedtls_threading_psa_globaldata_mutex);
 #endif /* defined(MBEDTLS_THREADING_C) */
 
+#if defined(MBEDTLS_PSA_CRYPTO_C)
 #if defined(MBEDTLS_THREADING_C)
     mbedtls_mutex_lock(&mbedtls_threading_psa_rngdata_mutex);
 #endif /* defined(MBEDTLS_THREADING_C) */
@@ -8993,6 +9037,7 @@ void mbedtls_psa_crypto_free(void)
 #if defined(MBEDTLS_THREADING_C)
     mbedtls_mutex_unlock(&mbedtls_threading_psa_rngdata_mutex);
 #endif /* defined(MBEDTLS_THREADING_C) */
+#endif /* MBEDTLS_PSA_CRYPTO_C */
 
 #if defined(MBEDTLS_THREADING_C)
     mbedtls_mutex_lock(&mbedtls_threading_psa_globaldata_mutex);
@@ -9013,7 +9058,9 @@ void mbedtls_psa_crypto_free(void)
 static psa_status_t mbedtls_psa_crypto_init_subsystem(mbedtls_psa_crypto_subsystem subsystem)
 {
     psa_status_t status = PSA_SUCCESS;
+#if defined(MBEDTLS_PSA_CRYPTO_C)
     uint8_t driver_wrappers_initialized = 0;
+#endif
 
     switch (subsystem) {
         case PSA_CRYPTO_SUBSYSTEM_DRIVER_WRAPPERS:
@@ -9059,7 +9106,7 @@ static psa_status_t mbedtls_psa_crypto_init_subsystem(mbedtls_psa_crypto_subsyst
             break;
 
         case PSA_CRYPTO_SUBSYSTEM_RNG:
-
+#if defined(MBEDTLS_PSA_CRYPTO_C)
 #if defined(MBEDTLS_THREADING_C)
             PSA_THREADING_CHK_GOTO_EXIT(mbedtls_mutex_lock(&mbedtls_threading_psa_globaldata_mutex));
 #endif /* defined(MBEDTLS_THREADING_C) */
@@ -9093,6 +9140,7 @@ static psa_status_t mbedtls_psa_crypto_init_subsystem(mbedtls_psa_crypto_subsyst
             PSA_THREADING_CHK_GOTO_EXIT(mbedtls_mutex_unlock(
                                             &mbedtls_threading_psa_rngdata_mutex));
 #endif /* defined(MBEDTLS_THREADING_C) */
+#endif /* MBEDTLS_PSA_CRYPTO_C */
 
             break;
 
@@ -9126,6 +9174,7 @@ exit:
     return status;
 }
 
+#if defined(MBEDTLS_PSA_CRYPTO_C)
 psa_status_t psa_crypto_init(void)
 {
     psa_status_t status;
@@ -9161,7 +9210,50 @@ exit:
 
     return status;
 }
+#endif /* MBEDTLS_PSA_CRYPTO_C - psa_crypto_init */
 
+#if defined(MBEDTLS_PSA_CRYPTO_CLIENT_BUILTIN_PAKE) && !defined(MBEDTLS_PSA_CRYPTO_C)
+psa_status_t psa_crypto_client_builtin_pake_ensure_initialized(void)
+{
+    psa_status_t status;
+    uint8_t initialized;
+
+#if defined(MBEDTLS_THREADING_C)
+    mbedtls_mutex_lock(&mbedtls_threading_psa_globaldata_mutex);
+#endif /* defined(MBEDTLS_THREADING_C) */
+
+    initialized = (global_data.initialized &
+                   (PSA_CRYPTO_SUBSYSTEM_KEY_SLOTS_INITIALIZED |
+                    PSA_CRYPTO_SUBSYSTEM_DRIVER_WRAPPERS_INITIALIZED)) ==
+                  (PSA_CRYPTO_SUBSYSTEM_KEY_SLOTS_INITIALIZED |
+                   PSA_CRYPTO_SUBSYSTEM_DRIVER_WRAPPERS_INITIALIZED);
+
+#if defined(MBEDTLS_THREADING_C)
+    mbedtls_mutex_unlock(&mbedtls_threading_psa_globaldata_mutex);
+#endif /* defined(MBEDTLS_THREADING_C) */
+
+    if (initialized) {
+        return PSA_SUCCESS;
+    }
+
+    status = mbedtls_psa_crypto_init_subsystem(PSA_CRYPTO_SUBSYSTEM_KEY_SLOTS);
+    if (status != PSA_SUCCESS) {
+        goto exit;
+    }
+
+    status = mbedtls_psa_crypto_init_subsystem(PSA_CRYPTO_SUBSYSTEM_DRIVER_WRAPPERS);
+    if (status != PSA_SUCCESS) {
+        goto exit;
+    }
+
+exit:
+    if (status != PSA_SUCCESS) {
+        mbedtls_psa_crypto_free();
+    }
+
+    return status;
+}
+#endif /* MBEDTLS_PSA_CRYPTO_CLIENT_BUILTIN_PAKE && !MBEDTLS_PSA_CRYPTO_C */
 
 
 /****************************************************************/
@@ -9328,6 +9420,13 @@ psa_status_t psa_pake_setup(
     const psa_pake_cipher_suite_t *cipher_suite)
 {
     psa_status_t status = PSA_ERROR_CORRUPTION_DETECTED;
+
+#if defined(MBEDTLS_PSA_CRYPTO_CLIENT_BUILTIN_PAKE) && !defined(MBEDTLS_PSA_CRYPTO_C)
+    status = psa_crypto_client_builtin_pake_ensure_initialized();
+    if (status != PSA_SUCCESS) {
+        goto exit;
+    }
+#endif
 
     if (operation->stage != PSA_PAKE_OPERATION_STAGE_SETUP) {
         status = PSA_ERROR_BAD_STATE;
@@ -9836,7 +9935,11 @@ psa_status_t psa_pake_get_shared_key(psa_pake_operation_t *operation,
         goto exit;
     }
 
+#if defined(MBEDTLS_PSA_CRYPTO_CLIENT_BUILTIN_PAKE) && !defined(MBEDTLS_PSA_CRYPTO_C)
+    status = psa_crypto_local_import_key(attributes, shared_key, shared_key_len, key);
+#else
     status = psa_import_key(attributes, shared_key, shared_key_len, key);
+#endif
 
 exit:
 
@@ -10054,4 +10157,4 @@ psa_status_t psa_crypto_local_output_free(psa_crypto_local_output_t *local_outpu
     return PSA_SUCCESS;
 }
 
-#endif /* MBEDTLS_PSA_CRYPTO_C */
+#endif /* MBEDTLS_PSA_CRYPTO_HAVE_LOCAL_PSA */

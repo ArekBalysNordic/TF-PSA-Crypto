@@ -20,6 +20,7 @@
 #include "crypto_types.h"
 #include "crypto_compat.h"
 #include "crypto_values.h"
+#include "tf-psa-crypto/psa_crypto_client_mode.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -1132,7 +1133,7 @@ typedef uint32_t psa_pake_primitive_t;
 /** Returns a suitable initializer for a PAKE operation object of type
  * psa_pake_operation_t.
  */
-#if defined(MBEDTLS_PSA_CRYPTO_CLIENT) && !defined(MBEDTLS_PSA_CRYPTO_C)
+#if MBEDTLS_PSA_CRYPTO_PSA_CLIENT_REMOTE
 #define PSA_PAKE_OPERATION_INIT { 0 }
 #else
 #define PSA_PAKE_OPERATION_INIT { 0, PSA_ALG_NONE, 0, PSA_PAKE_OPERATION_STAGE_SETUP, \
@@ -1228,8 +1229,12 @@ struct psa_jpake_computation_stage_s {
 #define PSA_JPAKE_EXPECTED_OUTPUTS(round) ((round) == PSA_JPAKE_FINISHED ? 0 : \
                                            ((round) == PSA_JPAKE_FIRST ? 2 : 1))
 
+#if !MBEDTLS_PSA_CRYPTO_PSA_CLIENT_REMOTE
+#include "psa/crypto_driver_contexts_composites.h"
+#endif
+
 struct psa_pake_operation_s {
-#if defined(MBEDTLS_PSA_CRYPTO_CLIENT) && !defined(MBEDTLS_PSA_CRYPTO_C)
+#if MBEDTLS_PSA_CRYPTO_PSA_CLIENT_REMOTE
     mbedtls_psa_client_handle_t handle;
 #else
     /** Unique ID indicating which driver got assigned to do the

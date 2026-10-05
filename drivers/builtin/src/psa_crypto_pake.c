@@ -8,7 +8,7 @@
 
 #include "tf_psa_crypto_common.h"
 
-#if defined(MBEDTLS_PSA_CRYPTO_C)
+#if MBEDTLS_PSA_CRYPTO_HAVE_LOCAL_PSA
 
 #include <psa/crypto.h>
 #include "psa_crypto_core.h"
@@ -565,4 +565,4 @@ psa_status_t mbedtls_psa_pake_abort(mbedtls_psa_pake_operation_t *operation)
 
 #endif /* MBEDTLS_PSA_BUILTIN_PAKE */
 
-#endif /* MBEDTLS_PSA_CRYPTO_C */
+#endif /* MBEDTLS_PSA_CRYPTO_HAVE_LOCAL_PSA */

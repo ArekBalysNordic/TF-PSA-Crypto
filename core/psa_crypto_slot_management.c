@@ -8,7 +8,7 @@
 
 #include "tf_psa_crypto_common.h"
 
-#if defined(MBEDTLS_PSA_CRYPTO_C)
+#if MBEDTLS_PSA_CRYPTO_HAVE_LOCAL_PSA
 
 #include "psa/crypto.h"
 
@@ -995,4 +995,4 @@ void mbedtls_psa_get_stats(mbedtls_psa_stats_t *stats)
     }
 }
 
-#endif /* MBEDTLS_PSA_CRYPTO_C */
+#endif /* MBEDTLS_PSA_CRYPTO_HAVE_LOCAL_PSA */

@@ -146,11 +146,11 @@
 /* Define additional internal symbols based on the library configuration. */
 #include "tf-psa-crypto/private/crypto_adjust_config_derived.h"
 
+#include "tf-psa-crypto/psa_crypto_client_mode.h"
+
 #if defined(MBEDTLS_PSA_CRYPTO_C)
-/* If we are implementing PSA crypto ourselves (as opposed to only
- * having client-side stubs), enable built-in drivers for all the
- * mechanisms activated with `PSA_WANT_xxx` that are not
- * accelerated. */
+/* Full local PSA: enable built-in drivers for every PSA_WANT_* mechanism
+ * that is not accelerated. */
 #include "mbedtls/private/crypto_adjust_config_enable_builtins.h"
 
 #if defined(TF_PSA_CRYPTO_TEST_LIBTESTDRIVER1)
@@ -164,7 +164,10 @@
 #if defined(MBEDTLS_CONFIG_ADJUST_TEST_ACCELERATORS) //no-check-names
 #include "mbedtls/private/config_adjust_test_accelerators.h"
 #endif
-#endif /* MBEDTLS_PSA_CRYPTO_C */
+#elif defined(MBEDTLS_PSA_CRYPTO_CLIENT_BUILTIN_PAKE)
+/* Client + builtin PAKE: only the J-PAKE/password-import builtins. */
+#include "tf-psa-crypto/private/crypto_adjust_config_enable_client_builtin_pake.h"
+#endif
 
 /* Define additional symbols used by support modules. */
 #include "tf-psa-crypto/private/crypto_adjust_config_support.h"

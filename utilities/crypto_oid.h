@@ -27,6 +27,10 @@
 
 #include "mbedtls/md.h"
 
+#if defined(PSA_WANT_KEY_TYPE_ECC_PUBLIC_KEY)
+#include "mbedtls/private/ecp.h"
+#endif
+
 #define MBEDTLS_ERR_OID_NOT_FOUND                         PSA_ERROR_NOT_SUPPORTED
 
 /*
